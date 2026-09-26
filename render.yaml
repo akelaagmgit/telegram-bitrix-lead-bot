@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: telegram-bitrix-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    healthCheckPath: /
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: BITRIX_WEBHOOK
+        sync: false
+      - key: LEAD_SOURCE_ID
+        value: "3"
+      - key: LEAD_STATUS_ID
+        value: NEW
+      - key: CONFIRM_IN_CHAT
+        value: "false"
+      - key: MERGE_MINUTES
+        value: "0"
+      - key: ENABLE_HEALTH
+        value: "true"

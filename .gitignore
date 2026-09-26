@@ -1,0 +1,6 @@
+.env
+*.log
+offset.txt
+lead_links.json
+__pycache__/
+*.pyc
