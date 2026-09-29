@@ -191,6 +191,8 @@ def new_entry(message: dict) -> dict:
     sender = message.get("from") or {}
     text = message.get("text") or message.get("caption") or ""
     phone = extract_phone(text)
+    if phone and not is_valid_phone(phone):
+        phone = None
     phone_source = "text" if phone else None
     if not phone:
         phone = find_known_phone(sender.get("id"))
@@ -319,6 +321,17 @@ def update_lead(entry: dict) -> None:
     bitrix_api("crm.lead.update", {"id": entry["lead_id"], "fields": fields})
 
 
+def is_valid_phone(value: str) -> bool:
+    digits = re.sub(r"\D", "", value or "")
+    if not digits:
+        return False
+    if digits.startswith("998"):
+        return len(digits) == 12
+    if len(digits) == 9 and digits.startswith("9"):
+        return True
+    return 10 <= len(digits) <= 15
+
+
 def find_known_phone(user_id) -> str | None:
     if not user_id:
         return None
@@ -339,7 +352,7 @@ def find_known_phone(user_id) -> str | None:
     for lead in leads:
         for item in lead.get("PHONE") or []:
             value = (item.get("VALUE") or "").strip()
-            if value:
+            if is_valid_phone(value):
                 return value
     return None
 
