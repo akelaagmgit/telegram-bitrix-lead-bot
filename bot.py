@@ -190,6 +190,12 @@ def new_entry(message: dict) -> dict:
     chat = message["chat"]
     sender = message.get("from") or {}
     text = message.get("text") or message.get("caption") or ""
+    phone = extract_phone(text)
+    phone_source = "text" if phone else None
+    if not phone:
+        phone = find_known_phone(sender.get("id"))
+        if phone:
+            phone_source = "history"
     return {
         "lead_id": None,
         "updated": time.time(),
@@ -198,7 +204,8 @@ def new_entry(message: dict) -> dict:
         "user_id": sender.get("id"),
         "display_name": sender_display_name(sender),
         "username": sender.get("username") or "",
-        "phone": extract_phone(text),
+        "phone": phone,
+        "phone_source": phone_source,
         "name": extract_name(text),
         "keywords": find_keywords(text),
         "messages": [
@@ -248,7 +255,8 @@ def build_comments(entry: dict) -> str:
         lines.append(f"Telegram username: @{entry['username']}")
     lines.append(f"Telegram ID: {entry['user_id']}")
     if entry.get("phone"):
-        lines.append(f"Telefon (xabardan): {entry['phone']}")
+        source = "xabardan" if entry.get("phone_source") == "text" else "oldingi xabarlardan"
+        lines.append(f"Telefon ({source}): {entry['phone']}")
         digits = re.sub(r"\D", "", entry["phone"])
         lines.append(f"Shaxsiy chat (1 klikda javob): https://t.me/+{digits}")
     if entry.get("name"):
@@ -309,6 +317,31 @@ def update_lead(entry: dict) -> None:
     if entry.get("name"):
         fields["NAME"] = entry["name"][:255]
     bitrix_api("crm.lead.update", {"id": entry["lead_id"], "fields": fields})
+
+
+def find_known_phone(user_id) -> str | None:
+    if not user_id:
+        return None
+    try:
+        leads = bitrix_api(
+            "crm.lead.list",
+            {
+                "filter": {FIELD_TELEGRAM_ID: str(user_id)},
+                "select": ["ID", "PHONE"],
+                "order": {"ID": "DESC"},
+            },
+        )
+    except Exception:
+        logger.exception("Telefon tarixini qidirishda xato")
+        return None
+    if not isinstance(leads, list):
+        return None
+    for lead in leads:
+        for item in lead.get("PHONE") or []:
+            value = (item.get("VALUE") or "").strip()
+            if value:
+                return value
+    return None
 
 
 def load_offset() -> int:
