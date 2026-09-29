@@ -357,6 +357,39 @@ def find_known_phone(user_id) -> str | None:
     return None
 
 
+def attach_phone_to_latest(user_id, phone: str) -> None:
+    if not user_id or not is_valid_phone(phone):
+        return
+    try:
+        leads = bitrix_api(
+            "crm.lead.list",
+            {
+                "filter": {FIELD_TELEGRAM_ID: str(user_id)},
+                "select": ["ID", "PHONE"],
+                "order": {"ID": "DESC"},
+            },
+        )
+    except Exception:
+        logger.exception("Telefonni saqlashda xato")
+        return
+    if not isinstance(leads, list) or not leads:
+        return
+    latest = leads[0]
+    for item in latest.get("PHONE") or []:
+        current = (item.get("VALUE") or "").strip()
+        if current and is_valid_phone(current):
+            return
+    try:
+        bitrix_api(
+            "crm.lead.update",
+            {"id": latest["ID"], "fields": {"PHONE": [{"VALUE": phone, "TYPE_ID": "WORK"}]}},
+        )
+    except Exception:
+        logger.exception("Telefonni yangilashda xato")
+        return
+    logger.info("Telefon tarixga yozildi #%s: %s", latest["ID"], phone)
+
+
 def load_offset() -> int:
     try:
         return int(OFFSET_FILE.read_text(encoding="utf-8").strip())
@@ -394,6 +427,9 @@ def handle_message(message: dict) -> None:
 
     found = find_keywords(text)
     if NORMALIZED_KEYWORDS and not found:
+        phone_only = extract_phone(text)
+        if phone_only and is_valid_phone(phone_only):
+            attach_phone_to_latest(sender.get("id"), phone_only)
         return
 
     key = f"{chat_id}:{sender.get('id')}"
